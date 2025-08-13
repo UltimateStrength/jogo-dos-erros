@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jogo dos Erros</title>
+  <style>
+    /* ====== PIXELCRAFT THEME ====== */
+    :root{
+      --bg: #1b2b24;      /* dark moss */
+      --bg-2:#22362d;     /* deep leaf */
+      --text:#f2f7f3;     /* paper */
+      --accent:#6cc24a;   /* grass */
+      --accent-2:#8b5e3c; /* wood */
+      --danger:#e45757;   /* lava */
+      --warn:#f0c419;     /* torch */
+      --info:#55c7f7;     /* water */
+      --stone:#3a4a44;    /* stone */
+    }
+
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; font-family: ui-rounded, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans", Arial;
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+      color:var(--text);
+    }
+
+    .wrap{
+      max-width: 950px; margin: 24px auto; padding: 16px;
+    }
+
+    h1{
+      margin:0 0 8px; letter-spacing:1px; text-shadow: 0 2px 0 #0005;
+    }
+    .subtitle{ opacity:.86; margin-bottom: 18px }
+
+    .panel{
+      background: linear-gradient(#2a3e35, #23362e);
+      border: 4px solid var(--stone);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 12px 0 #0d1612, inset 0 0 0 2px #0006;
+    }
+
+    .toolbar{
+      display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .controls{ display:flex; flex-wrap: wrap; gap: 10px }
+
+    select, button{
+      font: inherit; color: var(--text);
+      background: var(--stone);
+      border: 3px solid #00000066;
+      padding: 8px 12px; border-radius: 10px;
+      box-shadow: 0 6px 0 #0c1411;
+      cursor: pointer;
+    }
+    select{ cursor: pointer }
+    button.primary{ background: var(--accent); color:#0f2a15 }
+    button.wood{ background: var(--accent-2) }
+    button.warn{ background: var(--warn); color:#2b2305 }
+    button.danger{ background: var(--danger) }
+    button.info{ background: var(--info); color:#062534 }
+
+    button:active{ transform: translateY(2px); box-shadow: 0 4px 0 #0c1411 }
+
+    .stats{ display:flex; gap: 16px; font-weight: 600; }
+    .chip{ background: #00000033; padding: 6px 10px; border-radius: 999px; border: 1px solid #0006 }
+
+    .arena{
+      background: #21372f;
+      border: 4px dashed #0008; border-radius: 14px;
+      padding: 16px; line-height: 1.85;
+      font-size: 1.05rem;
+    }
+
+    .token{ padding: 1px 4px; margin: 0 2px; border-radius: 6px; transition: .12s ease; display:inline-block }
+    .token.wrong-hint{ outline: 2px dashed var(--warn); outline-offset: 3px }
+    .token.selectable:hover{ background: #ffffff12 }
+    .token.selected{ background: #ffffff28 }
+
+    /* Feedback on check */
+    .token.hit{ background: #6cc24a33; border: 1px solid #6cc24a }
+    .token.miss{ background: #e4575729; border: 1px solid #e45757 }
+    .token.missed-gold{ background: #f0c41924; border: 1px dashed #f0c419; animation: pulse 1s infinite }
+    @keyframes pulse{ 0%{box-shadow:0 0 0 0 #f0c41980} 70%{box-shadow:0 0 0 9px #f0c41900} 100%{box-shadow:0 0 0 0 #f0c41900} }
+
+    .footer{
+      margin-top: 14px; display:flex; gap: 10px; align-items:center; justify-content: space-between; flex-wrap: wrap;
+      opacity:.9
+    }
+
+    .correction{
+      white-space: pre-wrap; padding: 14px; background: #14231d; border: 3px solid #0006; border-radius: 12px;
+      display:none; margin-top: 12px
+    }
+
+    .legend{ font-size: .95rem; opacity:.85 }
+    .legend b{ opacity: 1 }
+
+    .brand{ font-size: .9rem; opacity:.7; margin-top: 10px }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Jogo dos Erros</h1>
+    <div class="subtitle">Clique nas palavras que você acha que estão <b>erradas</b>. Depois, pressione <b>Conferir</b>.</div>
+
+    <div class="panel">
+      <div class="toolbar">
+        <div class="controls">
+          <label>
+            <span style="opacity:.8; margin-right:6px">Texto:</span>
+            <select id="textSelect"></select>
+          </label>
+          <button class="info" id="btnHint">Revelar Dicas</button>
+          <button class="primary" id="btnCheck">Conferir</button>
+          <button class="wood" id="btnReset">Limpar Seleção</button>
+          <button id="btnShowCorrection">Mostrar Correção</button>
+        </div>
+        <div class="stats">
+          <div class="chip">Erros no texto: <span id="totalWrong">0</span></div>
+          <div class="chip">Selecionados: <span id="selectedCount">0</span></div>
+          <div class="chip">Acertos: <span id="hits">0</span></div>
+        </div>
+      </div>
+
+      <div id="arena" class="arena" aria-live="polite"></div>
+      <div id="correction" class="correction"></div>
+
+      <div class="footer">
+        <div class="legend">
+          <b>Dicas</b>: algumas palavras erradas podem se repetir (ex.: <i>mais</i> × <i>mas</i>). A pontuação considera <b>cada ocorrência</b> no texto.
+        </div>
+        <div class="brand">Tema: D19 - Reconhecer o efeito de sentido decorrente da exploração de recursos ortográficos e/ou morfossintáticos.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ====== DATA (3 TEXTS) ======
+  const DATA = [
+    {
+      id: 't1', title: 'Texto 1 – Dia na praça',
+      wrong: `Ontem, eu e meus amigo fomos na praça joga bola. A jente tava muito animado, mais o tempo começo a fecha e choveu forte. Mesmo assim, agente continuo jogando, até que um dos menino tropeçou e caiu feio. Nós tudo correu pra ajuda ele, mais ele só ralou o joeio. Depois, nois foi compra um suco na lanchonete, mais o dono falo que não tinha troco pra 50 real. No fim, voltamo pra casa todo molhado, mais rindo muito das coisa que aconteceu.`,
+      correct: `Ontem, eu e meus amigos fomos à praça jogar bola. A gente estava muito animado, mas o tempo começou a fechar e choveu forte. Mesmo assim, a gente continuou jogando, até que um dos meninos tropeçou e caiu feio. Nós todos corremos para ajudar ele, mas ele só ralou o joelho. Depois, nós fomos comprar um suco na lanchonete, mas o dono falou que não tinha troco para 50 reais. No fim, voltamos para casa todos molhados, mas rindo muito das coisas que aconteceram.`,
+      wrongTokens: [
+        'amigo','na','joga','jente','mais','começo','fecha','agente','continuo','menino','tudo','correu','ajuda','mais','joeio','nois','foi','compra','mais','falo','pra','real','voltamo','todo','mais','coisa','aconteceu'
+      ]
+    },
+    {
+      id: 't2', title: 'Texto 2 – Viagem ao litoral',
+      wrong: `Eu sempre quis viaja pro litoral, mais nunca tive oportunidade. No verão passado, meus primo me chamaro pra ir junto com eles. A viagem foi longa, mais a vista era linda demais. A gente fico hospedado numa pousada simples, mais aconchegante. Todo dia a gente acordava cedo pra ver o sol nascendo no orizonte. No ultimo dia, nois comprou lembranssas pra leva pra casa e tiramo várias foto pra guardar de recordação.`,
+      correct: `Eu sempre quis viajar para o litoral, mas nunca tive oportunidade. No verão passado, meus primos me chamaram para ir junto com eles. A viagem foi longa, mas a vista era linda demais. A gente ficou hospedado numa pousada simples, mas aconchegante. Todo dia a gente acordava cedo para ver o sol nascendo no horizonte. No último dia, nós compramos lembranças para levar para casa e tiramos várias fotos para guardar de recordação.`,
+      wrongTokens: [
+        'viaja','mais','primo','chamaro','fico','mais','pra','orizonte','ultimo','nois','comprou','lembranssas','pra','leva','tiramo','foto'
+      ]
+    },
+    {
+      id: 't3', title: 'Texto 3 – Trabalho na escola',
+      wrong: `Na escola, a professora pediu pra nois faze um trabalho sobre os animais da floresta. Eu escolhi fala sobre o tucano, por que acho ele muito bonito. Começei pesquisando na internete e achei varias informação legal. Descobri que o tucano vive nas matas tropicais e come fruta. No dia da apresentação, fiquei meio nervozo, mais todo mundo gostou do que eu falei e até bateram palma.`,
+      correct: `Na escola, a professora pediu para nós fazermos um trabalho sobre os animais da floresta. Eu escolhi falar sobre o tucano, porque acho ele muito bonito. Comecei pesquisando na internet e achei várias informações legais. Descobri que o tucano vive nas matas tropicais e come frutas. No dia da apresentação, fiquei meio nervoso, mas todo mundo gostou do que eu falei e até bateram palmas.`,
+      wrongTokens: [
+        'pra','nois','faze','fala','por','que','começei','internete','varias','informação','fruta','nervozo','mais','bateram','palma'
+      ]
+    },
+{
+  id: 't4', title: 'Texto 4 – Passeio no parque',
+  wrong: `No domingo, eu e minha prima fomos no parque pra caminha e respira ar puro. Levamo um lanche e ficamo sentados perto do lago vendo os patos nada. Mais começou a ventar forte e a gente teve que volta pra casa mais cedo.`,
+  correct: `No domingo, eu e minha prima fomos ao parque para caminhar e respirar ar puro. Levamos um lanche e ficamos sentados perto do lago vendo os patos nadarem. Mas começou a ventar forte e a gente teve que voltar para casa mais cedo.`,
+  wrongTokens: [
+    'no','pra','caminha','respira','levamo','ficamo','nada','mais','volta','mais'
+  ]
+},
+{
+  id: 't5', title: 'Texto 5 – Compras no mercado',
+  wrong: `Hoje fui no mercado compra pão, leite e banana. Quando cheguei no caixa percebi que tinha esquecido a carteira. A moça fico esperando eu procurar, mais não achei. Tive que volta correndo pra casa pra pega o dinheiro.`,
+  correct: `Hoje fui ao mercado comprar pão, leite e banana. Quando cheguei no caixa, percebi que tinha esquecido a carteira. A moça ficou esperando eu procurar, mas não achei. Tive que voltar correndo para casa para pegar o dinheiro.`,
+  wrongTokens: [
+    'no','compra','fico','mais','volta','pra','pega'
+  ]
+},
+{
+  id: 't6', title: 'Texto 6 – Dia chuvoso',
+  wrong: `Ontem choveu tanto que as rua ficou alagada. O ônibus atrasou e eu cheguei na escola todo molhado. A professora disse que as aula ia começa mais tarde, mais mesmo assim fiquei cansado o dia todo.`,
+  correct: `Ontem choveu tanto que as ruas ficaram alagadas. O ônibus atrasou e eu cheguei na escola todo molhado. A professora disse que as aulas iam começar mais tarde, mas mesmo assim fiquei cansado o dia todo.`,
+  wrongTokens: [
+    'rua','ficou','as','aula','ia','começa','mais'
+  ]
+},
+{
+  id: 't7', title: 'Texto 7 – Festa de aniversário',
+  wrong: `A festa do meu irmão foi muito legal. Teve bolo, doce, refrigerante e musica animada. Os amigo dele dançaro bastante e todo mundo saiu feliz. Minha mãe falava que nunca viu uma festa tão divertido.`,
+  correct: `A festa do meu irmão foi muito legal. Teve bolo, doces, refrigerante e música animada. Os amigos dele dançaram bastante e todo mundo saiu feliz. Minha mãe falava que nunca viu uma festa tão divertida.`,
+  wrongTokens: [
+    'doce','musica','amigo','dançaro','divertido'
+  ]
+},
+{
+  id: 't8', title: 'Texto 8 – Viagem de férias',
+  wrong: `Nas férias, nois viajamo pro interior pra visita meus avó. Lá tinha muito verde e um rio onde dava pra pesca. Passamos o dia nadando e brincando. Na volta, trouxemos fruta e queijo caseiro.`,
+  correct: `Nas férias, nós viajamos para o interior para visitar meus avós. Lá tinha muito verde e um rio onde dava para pescar. Passamos o dia nadando e brincando. Na volta, trouxemos frutas e queijo caseiro.`,
+  wrongTokens: [
+    'nois','viajamo','pro','pra','visita','avó','pra','pesca','fruta'
+  ]
+},
+{
+  id: 't9', title: 'Texto 9 – Treino de futebol',
+  wrong: `No treino de futebol, o tecnico mandou nois corre dez volta no campo. Depois fizemo alguns exercicio de chute e passe. Foi cansativo, mais muito divertido.`,
+  correct: `No treino de futebol, o técnico mandou nós corrermos dez voltas no campo. Depois fizemos alguns exercícios de chute e passe. Foi cansativo, mas muito divertido.`,
+  wrongTokens: [
+    'tecnico','nois','corre','volta','fizemo','exercicio','mais'
+  ]
+},
+{
+  id: 't10', title: 'Texto 10 – Dia na praia',
+  wrong: `Fui na praia com meus primo e levamo guarda-sol e cadeira. A gente nado no mar, jogou bola e comeu milho cozido. O sol tava forte e eu fiquei todo queimado. Mais valeu a pena.`,
+  correct: `Fui à praia com meus primos e levamos guarda-sol e cadeira. A gente nadou no mar, jogou bola e comeu milho cozido. O sol estava forte e eu fiquei todo queimado. Mas valeu a pena.`,
+  wrongTokens: [
+    'na','primo','levamo','nado','tava','mais'
+  ]
+}
+
+  ];
+
+  // ====== HELPERS ======
+  const arena = document.getElementById('arena');
+  const corr  = document.getElementById('correction');
+  const select = document.getElementById('textSelect');
+  const totalWrongEl = document.getElementById('totalWrong');
+  const selectedCountEl = document.getElementById('selectedCount');
+  const hitsEl = document.getElementById('hits');
+
+  // Build select
+  for (const t of DATA){
+    const opt = document.createElement('option');
+    opt.value = t.id; opt.textContent = t.title; select.appendChild(opt);
+  }
+
+  const normalize = (s) => (s||'')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '') // remove diacritics combining marks (safety)
+    .replace(/^[\s.,;:!?()"'“”\[\]{}]+|[\s.,;:!?()"'“”\[\]{}]+$/g, ''); // trim punct
+
+  let state = { idx:0, tokens:[], tokenNodes:[], wrongMask:[], selected:new Set(), checked:false };
+
+  function loadById(id){
+    const idx = DATA.findIndex(x=>x.id===id);
+    if(idx>=0){
+      state.idx = idx; render();
+    }
+  }
+
+  function render(){
+    const item = DATA[state.idx];
+    arena.innerHTML = '';
+    corr.style.display = 'none';
+
+    // Prepare fast lookup for wrong tokens for this text
+    const wrongSet = new Set(item.wrongTokens.map(normalize));
+
+    // Tokenize by splitting on spaces but keep punctuation attached; we will normalize on checks
+    const rawTokens = item.wrong.split(/(\s+)/); // keep spaces as tokens too
+
+    state.tokens = rawTokens; // includes spaces
+    state.tokenNodes = [];
+    state.wrongMask = [];
+    state.selected.clear();
+    state.checked = false;
+    selectedCountEl.textContent = '0';
+    hitsEl.textContent = '0';
+
+    // Count wrong occurrences
+    let wrongCount = 0;
+
+    rawTokens.forEach((tk, i) => {
+      if(/\s+/.test(tk)){
+        arena.appendChild(document.createTextNode(tk));
+        state.tokenNodes.push(null);
+        state.wrongMask.push(false);
+        return;
+      }
+      const span = document.createElement('span');
+      span.className = 'token selectable';
+      span.textContent = tk;
+      span.tabIndex = 0;
+
+      const isWrong = wrongSet.has(normalize(tk));
+      state.wrongMask.push(isWrong);
+      if(isWrong) wrongCount++;
+
+      span.addEventListener('click', ()=>toggle(i));
+      span.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(i); } });
+
+      arena.appendChild(span);
+      state.tokenNodes.push(span);
+    });
+
+    totalWrongEl.textContent = String(wrongCount);
+  }
+
+  function toggle(i){
+    const node = state.tokenNodes[i];
+    if(!node) return; // space
+
+    // If already checked, reset feedback style for this token to allow re-selection
+    node.classList.remove('hit','miss','missed-gold');
+
+    if(state.selected.has(i)){
+      state.selected.delete(i);
+      node.classList.remove('selected');
+    } else {
+      state.selected.add(i);
+      node.classList.add('selected');
+    }
+    selectedCountEl.textContent = String(state.selected.size);
+  }
+
+  function check(){
+    const item = DATA[state.idx];
+    const wrongSet = new Set(item.wrongTokens.map(normalize));
+
+    let hits = 0;
+    // Mark selections
+    state.selected.forEach(i=>{
+      const tk = state.tokens[i];
+      const node = state.tokenNodes[i];
+      if(!node) return;
+      const ok = wrongSet.has(normalize(tk));
+      node.classList.toggle('hit', ok);
+      node.classList.toggle('miss', !ok);
+      if(ok) hits++;
+    });
+
+    // Mark missed wrong tokens
+    state.wrongMask.forEach((isWrong, i)=>{
+      if(isWrong && !state.selected.has(i)){
+        const node = state.tokenNodes[i];
+        if(node) node.classList.add('missed-gold');
+      }
+    });
+
+    hitsEl.textContent = String(hits);
+    state.checked = true;
+  }
+
+  function resetSelection(){
+    state.selected.forEach(i=>{
+      const node = state.tokenNodes[i];
+      if(node) node.classList.remove('selected','hit','miss');
+    });
+    state.tokenNodes.forEach(n=>{ if(n) n.classList.remove('missed-gold'); });
+    state.selected.clear();
+    selectedCountEl.textContent = '0';
+    hitsEl.textContent = '0';
+    state.checked = false;
+  }
+
+  function showCorrection(){
+    const item = DATA[state.idx];
+    corr.textContent = item.correct;
+    corr.style.display = (corr.style.display==='none') ? 'block' : 'none';
+  }
+
+  function hint(){
+    // reveal ~30% of wrong tokens (random) as dashed outline
+    const wrongIdxs = state.wrongMask.map((isW, i)=> isW ? i : -1).filter(i=>i>=0);
+    const n = Math.max(1, Math.round(wrongIdxs.length*0.3));
+    const shuffled = wrongIdxs.sort(()=> Math.random()-0.5).slice(0,n);
+    // clear previous hints
+    state.tokenNodes.forEach(n=>{ if(n) n.classList.remove('wrong-hint'); });
+    shuffled.forEach(i=>{ const n = state.tokenNodes[i]; if(n) n.classList.add('wrong-hint'); });
+  }
+
+  // UI bindings
+  document.getElementById('btnCheck').addEventListener('click', check);
+  document.getElementById('btnReset').addEventListener('click', resetSelection);
+  document.getElementById('btnShowCorrection').addEventListener('click', showCorrection);
+  document.getElementById('btnHint').addEventListener('click', hint);
+  select.addEventListener('change', (e)=> loadById(e.target.value));
+
+  // init
+  select.value = DATA[0].id; loadById(DATA[0].id);
+  </script>
+</body>
+</html>
